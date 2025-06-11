@@ -1,173 +1,113 @@
 `timescale 1ns / 1ps
 
-////////////////////////////////////////////////////////////////////////////////
-// Company: 
-// Engineer:
-//
-// Create Date:   23:43:43 01/25/2024
-// Design Name:   top_module
-// Module Name:   E:/IC_design/Verilog/FPGA_S6/infrared_rcv/sim/tb_top_module.v
-// Project Name:  infrared_rcv
-// Target Device:  
-// Tool versions:  
-// Description: 
-//
-// Verilog Test Fixture created by ISE for module: top_module
-//
-// Dependencies:
-// 
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-// 
-////////////////////////////////////////////////////////////////////////////////
-
 module tb_top_module;
 
-	// Inputs
-	reg sys_clk;
-	reg sys_rst_n;
-	reg infrared_in;
+    // Entradas
+    reg sys_clk;
+    reg sys_rst_n;
+    reg infrared_in;
 
-	// Outputs
-	wire [5:0] sel;
-	wire [7:0] seg;
-	wire led;
+    // Saídas
+    wire [5:0] sel;
+    wire [7:0] seg;
+    wire led;
 
-	// Instantiate the Unit Under Test (UUT)
-	top_module uut (
-		.sys_clk(sys_clk), 
-		.sys_rst_n(sys_rst_n), 
-		.infrared_in(infrared_in), 
-		.sel(sel), 
-		.seg(seg), 
-		.led(led)
-	);
+    // Instância do módulo principal (DUT)
+    top_module uut (
+        .sys_clk(sys_clk),
+        .sys_rst_n(sys_rst_n),
+        .infrared_in(infrared_in),
+        .sel(sel),
+        .seg(seg),
+        .led(led)
+    );
 
-	initial begin
-		// Initialize Inputs
-		sys_clk = 1'b1;
-		sys_rst_n <= 1'b0;
-		infrared_in <= 1'b1;
+    // Clock 50 MHz
+    always #10 sys_clk = ~sys_clk;
 
-		// Wait 100 ns for global reset to finish
-		#100;
-        sys_rst_n <= 1'b1;
+    initial begin
+        // Inicializações
+        sys_clk     = 1'b1;
+        sys_rst_n   = 1'b0;
+        infrared_in = 1'b1;
 
-		// Add stimulus here
-		#1000
-		infrared_in <= 1'b0; #9000000
-		infrared_in <= 1'b1; #4500000
-		//address code: 8’h99
-		//data code: 1
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #1690000
-		//data code: 0
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #560000
-		//data code: 0
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #560000
-		//data code: 1
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #1690000
-		//data code: 1
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #1690000
-		//data code: 0
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #560000
-		//data code: 0
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #560000
-		//data code: 1
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #1690000
-		//reversed address code: 8’h66
-		//data code: 0
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #560000
-		//data code: 1
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #1690000
-		//data code: 1
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #1690000
-		//data code: 0
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #560000
-		//data code: 0
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #560000
-		//data code: 1
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #1690000
-		//data code: 1
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #1690000
-		//data code: 0
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #560000
-		//address code: 8’h22
-		//data code: 0
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #560000
-		//data code: 1
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #1690000
-		//data code: 0
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #560000
-		//data code: 0
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #560000
-		//data code: 0
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #560000
-		//data code: 1
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #1690000
-		//data code: 0
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #560000
-		//data code: 0
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #560000
-		//reversed address code: 8’hdd
-		//data code: 1
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #1690000
-		//data code: 0
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #560000
-		//data code: 1
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #1690000
-		//data code: 1
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #1690000
-		//data code: 1
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #1690000
-		//data code: 0
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #560000
-		//data code: 1
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #1690000
-		//data code: 1
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #1690000
-		//repeat code
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1; #42000000
-		infrared_in <= 1'b0; #9000000
-		infrared_in <= 1'b1; #2250000
-		infrared_in <= 1'b0; #560000
-		infrared_in <= 1'b1;
-	end
+        #100;
+        sys_rst_n = 1'b1;
+        #100;
 
-	always #10 sys_clk = ~sys_clk;
-      
+        // Enviar comandos NEC
+        send_nec("POWER", 8'h4D, 8'h80); // POWER ON/OFF
+        send_nec("CH-",   8'h4D, 8'h38);
+        send_nec("CH+",   8'h4D, 8'h18);
+        send_nec("VOL-",  8'h4D, 8'h08);
+        send_nec("VOL+",  8'h4D, 8'h30);
+        send_nec("MENU",  8'h4D, 8'h50);
+        send_nec("NUM 1", 8'h4D, 8'hA8);
+        send_nec("NUM 2", 8'h4D, 8'h68);
+        send_nec("NUM 3", 8'h4D, 8'hE8);
+
+        // Espera final para observar comportamento
+        #100_000_000;
+        $stop;
+    end
+
+    // Task para enviar um bit (0 ou 1) no padrão NEC
+    task send_bit;
+        input value;
+        begin
+            infrared_in = 0; #560_000;
+            infrared_in = 1;
+            if (value)
+                #1690_000;
+            else
+                #560_000;
+        end
+    endtask
+
+    // Task para enviar um byte (8 bits, LSB-first)
+    task send_byte;
+        input [7:0] byte_val;
+        integer i;
+        begin
+            for (i = 0; i < 8; i = i + 1)
+                send_bit(byte_val[i]);
+        end
+    endtask
+
+    // Task principal para enviar um frame NEC completo
+    task send_nec;
+        input [160*8:0] label;  // Nome do comando
+        input [7:0] addr;
+        input [7:0] cmd;
+        reg [7:0] addr_inv, cmd_inv;
+        begin
+            addr_inv = ~addr;
+            cmd_inv  = ~cmd;
+
+            $display("== Comando: %s ==", label);
+            $display("   ADDR = 0x%02X, CMD = 0x%02X", addr, cmd);
+
+            // Pulso de início (START NEC)
+            infrared_in = 0; #9000_000;
+            infrared_in = 1; #4500_000;
+
+            // Enviar dados
+            send_byte(addr);
+            send_byte(addr_inv);
+            send_byte(cmd);
+            send_byte(cmd_inv);
+
+            // Pulso final
+            infrared_in = 0; #560_000;
+            infrared_in = 1;
+
+            // Espera para o sistema processar
+            #40_000_000;
+
+            $display("   LED  = %b", led);
+            $display("   SEL  = %b", sel);
+            $display("   SEG  = %b\n", seg);
+        end
+    endtask
+
 endmodule
-

@@ -18,12 +18,13 @@ module top_module (
         .data(data)
     );
 
-    led_ctrl led_ctrl_inst (
-        .sys_clk(sys_clk),
-        .sys_rst_n(sys_rst_n),
-        .repeat_en(repeat_en),
-        .led(led)
-    );
+    led_status_ctrl led_status_ctrl_inst (
+    .clk(sys_clk),
+    .rst_n(sys_rst_n),
+    .ir_cmd(data[15:8]),  // ou outro campo válido do seu sinal IR
+    .ir_valid(repeat_en), // ou outro pulso que indique comando recebido
+    .led(led)
+);
 
     seg_dynamic seg_dynamic_inst (
         .sys_clk(sys_clk),
@@ -35,7 +36,5 @@ module top_module (
         .sel(sel),
         .seg(seg)
     );
-
-
     
 endmodule

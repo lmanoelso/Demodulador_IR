@@ -1,56 +1,145 @@
-module led_ctrl (
-    input wire repeat_en,
-    input wire sys_clk,
-    input wire sys_rst_n,
-    output reg led
+module led_status_ctrl (
+    input wire clk,
+    input wire rst_n,
+    input wire [7:0] ir_cmd,
+    input wire ir_valid,       // Pulso que indica comando IR recebido
+    output reg led             // 1 = LED aceso (standby), 0 = apagado (ligado)
 );
 
-    parameter CNT_MAX = 250_0000;   // 50ms count from 0~250_0000
+    // Definição dos estados
+    parameter STANDBY  = 2'b00;
+    parameter LIGADO   = 2'b01;
 
-    reg repeat_en_dly;
-    wire repeat_en_rise;
-    reg cnt_en;
-    reg [21:0] cnt;
+    reg [1:0] state;
+    reg [1:0] next_state;
 
-    // repeat_en_dly: repeat_en 1 clk cycle delay
-    always @(posedge sys_clk or negedge sys_rst_n) begin
-        if (sys_rst_n == 1'b0)
-            repeat_en_dly <= 1'b0;
-        else 
-            repeat_en_dly <= repeat_en;
+    // Máquina de estados: transição de estado
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            state <= STANDBY;
+        else
+            state <= next_state;
     end
 
-    // repeat_en_rise: flag signal, detect the posedge of repeat_en 
-    assign repeat_en_rise = (repeat_en_dly == 1'b0 && repeat_en == 1'b1) ? 1'b1 : 1'b0;
+    // Lógica de transição
+    always @(*) begin
+        case (state)
+            STANDBY: begin
+                if (ir_valid && ir_cmd == 8'h80)  // Comando POWER ON
+                    next_state = LIGADO;
+                else
+                    next_state = STANDBY;
+            end
 
-    // cnt_en
-    always @(posedge sys_clk or negedge sys_rst_n) begin
-        if (sys_rst_n == 1'b0)
-            cnt_en <= 1'b0;
-        else if (repeat_en_rise == 1'b1)
-            cnt_en <= 1'b1;
-        else if (cnt == CNT_MAX - 1'b1)
-            cnt_en <= 1'b0;
+            LIGADO: begin
+                if (ir_valid && ir_cmd == 8'h80)  // Comando POWER OFF
+                    next_state = STANDBY;
+                else
+                    next_state = LIGADO;  // Ligado
+            end
+
+            default: next_state = STANDBY;
+        endcase
     end
 
-    // cnt
-    always @(posedge sys_clk or negedge sys_rst_n) begin
-        if (sys_rst_n == 1'b0)
-            cnt <= 22'd0;
-        else if (cnt_en == 1'b1)
-            cnt <= cnt + 1'b1;
-        else 
-            cnt <= 22'd0;
+    // Saída LED: 1 = standby (ligado), 0 = ligado (apagado)
+    always @(*) begin
+        case (state)
+            STANDBY: led = 1'b1;
+            LIGADO:  led = 1'b0;
+            default: led = 1'b1;
+        endcase
     end
 
-    // led
-    always @(posedge sys_clk or negedge sys_rst_n) begin
-        if (sys_rst_n == 1'b0)
-            led <= 1'b0;
-        else if (cnt > 22'd0)
-            led <= 1'b1;
-        else 
-            led <= 1'b0;
-    end
-    
 endmodule
+
+`timescale 1ns / 1ps
+
+module tb_led_status_ctrl;
+
+    // Entradas
+    reg clk;
+    reg rst_n;
+    reg [7:0] ir_cmd;
+    reg ir_valid;
+
+    // Saída
+    wire led;
+
+    // Instância do módulo testado
+    led_status_ctrl uut (
+        .clk(clk),
+        .rst_n(rst_n),
+        .ir_cmd(ir_cmd),
+        .ir_valid(ir_valid),
+        .led(led)
+    );
+
+/*    `timescale 1ns / 100ps
+
+    // Geração de clock (100MHz)
+    initial clk = 0;
+    always #5 clk = ~clk;
+
+    initial begin
+        $display("Início do Teste - LED Standby");
+
+        // Inicialização
+        rst_n = 0;
+        ir_cmd = 8'h00;
+        ir_valid = 0;
+
+        #20;
+        rst_n = 1; // Libera reset
+
+        #20;
+        $display("LED após reset = %b (esperado: 1)", led);
+
+        // Simula comando aleatório (não é POWER ON)
+        ir_cmd = 8'h1F;
+        ir_valid = 1;
+        #10;
+        ir_valid = 0;
+
+        #20;
+        $display("LED após comando inválido = %b (esperado: 1)", led);
+
+        // Simula comando POWER ON 
+        ir_cmd = 8'h80;
+        ir_valid = 1;
+        #10;
+        ir_valid = 0;
+
+        #20;
+        $display("LED após POWER ON = %b (esperado: 0)", led);
+
+        // Simula novo comando após POWER ON (deve permanecer apagado)
+        ir_cmd = 8'h12;
+        ir_valid = 1;
+        #10;
+        ir_valid = 0;
+
+        #20;
+        $display("LED após outro comando = %b (esperado: 0)", led);
+
+        // Simula novo comando após POWER ON (deve permanecer apagado)
+        ir_cmd = 8'h80;
+        ir_valid = 1;
+        #10;
+        ir_valid = 0;
+
+        #20;
+        $display("LED após outro comando = %b (esperado: 0)", led);
+        // Aplica reset
+        rst_n = 0;
+        #20;
+        rst_n = 1;
+
+        #20;
+        $display("LED após novo reset = %b (esperado: 1)", led);
+
+        $finish;
+    end
+
+endmodule
+    */

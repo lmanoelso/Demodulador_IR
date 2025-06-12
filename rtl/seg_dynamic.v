@@ -1,160 +1,142 @@
-module seg_dynamic (
-    input wire sys_clk, 
-    input wire sys_rst_n, 
-    input wire [5:0] point, 
-    input wire seg_en, 
-    input wire [19:0] data, 
-    input wire sign, 
-    output reg [5:0] sel, 
-    output reg [7:0] seg
+// shift_display_driver.v
+// Controla o envio serial para o 74HC164 com dados vindos de seg_dynamic
+
+module shift_display_driver (
+    input wire clk,             // clock do sistema
+    input wire rst_n,          // reset ativo baixo
+    input wire [7:0] seg_data, // dado a ser exibido (7 segmentos)
+    input wire [3:0] digit_sel,// dígito ativo (0-3)
+    input wire start,          // inicia transmissão serial
+    output reg sr_clk,         // clock serial para o 74HC164
+    output reg sr_data,        // dado serial (bit a bit)
+    output reg [3:0] digit_enable, // ativação do dígito correspondente
+    output reg busy            // sinaliza transmissão em andamento
 );
-    
-    parameter CNT_MAX = 16'd49_999;
 
-    wire [3:0] unit; 
-    wire [3:0] ten; 
-    wire [3:0] hun; 
-    wire [3:0] tho; 
-    wire [3:0] t_tho; 
-    wire [3:0] h_hun; 
+    reg [3:0] bit_cnt;
+    reg [7:0] shift_reg;
+    reg [3:0] state;
 
-    reg [23:0] data_reg; 
-    reg [15:0] cnt_1ms;
-    reg flag_1ms; 
-    reg [2:0] cnt_sel;
-    reg [3:0] data_disp; 
-    reg [5:0] sel_reg;
-    reg dot_disp;
+    parameter IDLE = 4'd0;
+    parameter LOAD = 4'd1;
+    parameter SHIFT = 4'd2;
+    parameter HOLD = 4'd3;
 
+    reg [7:0] clk_cnt;
+    parameter CLK_DIV = 1315; // para 38kHz a partir de 50MHz
+    reg clk_38khz;
 
-    always @(posedge sys_clk or negedge sys_rst_n) begin
-        if (sys_rst_n == 1'b0)
-            data_reg <= 24'd0;
-        else if (h_hun || point[5])
-            data_reg <= {h_hun, t_tho, tho, hun, ten, unit}; 
-        else if ((t_tho || point[4]) && (sign == 1'b1))
-            data_reg <= {4'd10, t_tho, tho, hun, ten, unit};
-        else if ((t_tho || point[4]) && (sign == 1'b0))
-            data_reg <= {4'd11, t_tho, tho, hun, ten, unit}; 
-        else if ((tho || point[3]) && (sign == 1'b1))
-            data_reg <= {4'd11, 4'd10, tho, hun, ten, unit}; 
-        else if ((tho || point[3]) && (sign == 1'b0))
-            data_reg <= {4'd11, 4'd11, tho, hun, ten, unit}; 
-        else if ((hun || point[2]) && (sign == 1'b1))
-            data_reg <= {4'd11, 4'd11, 4'd10, hun, ten, unit}; 
-        else if ((hun || point[2]) && (sign == 1'b0))
-            data_reg <= {4'd11, 4'd11, 4'd11, hun, ten, unit}; 
-        else if ((ten || point[1]) && (sign == 1'b1))
-            data_reg <= {4'd11, 4'd11, 4'd11, 4'd10, ten, unit}; 
-        else if ((ten || point[1]) && (sign == 1'b0))
-            data_reg <= {4'd11, 4'd11, 4'd11, 4'd11, ten, unit}; 
-        else if ((unit || point[0]) && (sign == 1'b1))
-            data_reg <= {4'd11, 4'd11, 4'd11, 4'd11, 4'd10, unit}; 
-        else 
-            data_reg <= {4'd11, 4'd11, 4'd11, 4'd11, 4'd11, unit}; 
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            clk_cnt <= 0;
+            clk_38khz <= 0;
+        end else if (clk_cnt >= CLK_DIV/2) begin
+            clk_cnt <= 0;
+            clk_38khz <= ~clk_38khz;
+        end else begin
+            clk_cnt <= clk_cnt + 1;
+        end
     end
 
-    always @(posedge sys_clk or negedge sys_rst_n) begin
-        if (sys_rst_n == 1'b0)
-            cnt_1ms <= 16'd0; 
-        else if (cnt_1ms == CNT_MAX)
-            cnt_1ms <= 16'd0; 
-        else 
-            cnt_1ms <= cnt_1ms + 1'b1;
-    end
+    always @(posedge clk_38khz or negedge rst_n) begin
+        if (!rst_n) begin
+            state <= IDLE;
+            sr_clk <= 0;
+            sr_data <= 0;
+            busy <= 0;
+            bit_cnt <= 0;
+            digit_enable <= 4'b0000;
+        end else begin
+            case (state)
+                IDLE: begin
+                    sr_clk <= 0;
+                    sr_data <= 0;
+                    busy <= 0;
+                    if (start) begin
+                        shift_reg <= seg_data;
+                        bit_cnt <= 0;
+                        busy <= 1;
+                        state <= SHIFT;
+                    end
+                end
 
-    always @(posedge sys_clk or negedge sys_rst_n) begin
-        if (sys_rst_n == 1'b0)
-            flag_1ms <= 1'b0; 
-        else if (cnt_1ms == CNT_MAX - 1'b1)
-            flag_1ms <= 1'b1;
-        else 
-            flag_1ms <= 1'b0;
-    end
+                SHIFT: begin
+                    if (bit_cnt < 8) begin
+                        sr_data <= shift_reg[7];
+                        shift_reg <= shift_reg << 1;
+                        sr_clk <= 1;
+                        bit_cnt <= bit_cnt + 1;
+                    end else begin
+                        sr_clk <= 0;
+                        state <= HOLD;
+                        digit_enable <= (4'b0001 << digit_sel);
+                    end
+                end
 
-    always @(posedge sys_clk or negedge sys_rst_n) begin
-        if (sys_rst_n == 1'b0)
-            cnt_sel <= 3'd0;
-        else if (cnt_sel == 3'd5 && flag_1ms == 1'b1)
-            cnt_sel <= 3'd0;
-        else if (flag_1ms == 1'b1)
-            cnt_sel <= cnt_sel + 1'b1;
-        else 
-            cnt_sel <= cnt_sel;
-    end
-
-    always @(posedge sys_clk or negedge sys_rst_n) begin
-        if (sys_rst_n == 1'b0)
-            data_disp <= 4'd0;
-        else if (seg_en == 1'b1 && flag_1ms == 1'b1)
-            case (cnt_sel)
-                3'd0: data_disp <= data_reg[3:0];
-                3'd1: data_disp <= data_reg[7:4];
-                3'd2: data_disp <= data_reg[11:8];
-                3'd3: data_disp <= data_reg[15:12];
-                3'd4: data_disp <= data_reg[19:16];
-                3'd5: data_disp <= data_reg[23:20];
-                default: data_disp <= 4'b0000;
+                HOLD: begin
+                    state <= IDLE;
+                end
             endcase
+        end
     end
+endmodule
 
-    always @(posedge sys_clk or negedge sys_rst_n) begin
-        if (sys_rst_n == 1'b0)
-            sel_reg <= 6'b00_0000;
-        else if (cnt_sel == 3'd0 && flag_1ms == 1'b1)
-            sel_reg <= 6'b00_0001;
-        else if (flag_1ms == 1'b1)
-            sel_reg <= sel_reg << 1;
-        else 
-            sel_reg <= sel_reg;
-    end
+// Testbench para shift_display_driver
 
-    always @(posedge sys_clk or negedge sys_rst_n) begin
-        if (sys_rst_n == 1'b0)
-            dot_disp <= 1'b1;
-        else if (flag_1ms == 1'b1)
-            dot_disp <= ~point[cnt_sel]; 
-        else 
-            dot_disp <= dot_disp;
-    end
+`timescale 1ns/100ps
 
-    always @(posedge sys_clk or negedge sys_rst_n) begin
-        if (sys_rst_n == 1'b0)
-            sel <= 6'b00_0000;
-        else 
-            sel <= sel_reg;
-    end
+module tb_shift_display_driver;
+    reg clk;
+    reg rst_n;
+    reg [7:0] seg_data;
+    reg [3:0] digit_sel;
+    reg start;
+    wire sr_clk;
+    wire sr_data;
+    wire [3:0] digit_enable;
+    wire busy;
 
-    always @(posedge sys_clk or negedge sys_rst_n) begin
-        if (sys_rst_n == 1'b0)
-            seg <= 8'b1111_1111;
-        else
-            case (data_disp)
-                4'd0: seg <= {dot_disp, 7'b100_0000};
-                4'd1: seg <= {dot_disp, 7'b111_1001};
-                4'd2: seg <= {dot_disp, 7'b010_0100};
-                4'd3: seg <= {dot_disp, 7'b011_0000};
-                4'd4: seg <= {dot_disp, 7'b001_1001};
-                4'd5: seg <= {dot_disp, 7'b001_0010};
-                4'd6: seg <= {dot_disp, 7'b000_0010};
-                4'd7: seg <= {dot_disp, 7'b111_1000};
-                4'd8: seg <= {dot_disp, 7'b000_0000};
-                4'd9: seg <= {dot_disp, 7'b001_0000};
-                4'd10: seg <= 8'b1011_1111;
-                4'd11: seg <= 8'b1111_1111;
-                default: seg <= 8'b1100_0000;
-            endcase
-    end
-
-    bcd_8421 bcd_8421_inst (
-        .sys_clk (sys_clk),
-        .sys_rst_n (sys_rst_n),
-        .data (data),
-        .unit (unit),
-        .ten (ten),
-        .hun (hun),
-        .tho (tho),
-        .t_tho (t_tho),
-        .h_hun (h_hun)
+    // Instância do módulo
+    shift_display_driver uut (
+        .clk(clk),
+        .rst_n(rst_n),
+        .seg_data(seg_data),
+        .digit_sel(digit_sel),
+        .start(start),
+        .sr_clk(sr_clk),
+        .sr_data(sr_data),
+        .digit_enable(digit_enable),
+        .busy(busy)
     );
+
+    // Clock 50 MHz
+    always #10 clk = ~clk;
+
+    initial begin
+        $display("Inicio da simulação");
+
+        clk = 0;
+        rst_n = 0;
+        seg_data = 8'hC0;  // número 0 nos 7 segmentos comuns
+        digit_sel = 0;
+        start = 0;
+
+        #100;
+        rst_n = 1;
+
+        // Simula exibição sequencial de 0 a 3
+        repeat (4) begin
+            @(posedge clk);
+            seg_data = seg_data + 8'h01; // próxima codificação (simulada)
+            digit_sel = digit_sel + 1;
+            start = 1;
+            @(posedge clk);
+            start = 0;
+            // espera até busy ser 0
+            wait (!busy);
+        end
+
+        $display("Fim da simulação");
+        $stop;
+    end
 endmodule

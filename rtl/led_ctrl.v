@@ -53,7 +53,7 @@ module led_status_ctrl (
 
 endmodule
 
-`timescale 1ns / 1ps
+/*`timescale 1ns / 1ps
 
 module tb_led_status_ctrl;
 
@@ -75,7 +75,7 @@ module tb_led_status_ctrl;
         .led(led)
     );
 
-/*    `timescale 1ns / 100ps
+  `timescale 1ns / 100ps
 
     // Geração de clock (100MHz)
     initial clk = 0;

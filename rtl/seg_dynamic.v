@@ -1,90 +1,103 @@
-// canal_display_ctrl.v
-// Controla o display de canal quando o sistema está ligado
+// shift_display_driver.v
+// Controla o envio serial para o 74HC164 com dados vindos de seg_dynamic
 
-module canal_display_ctrl (
-    input wire clk,
-    input wire rst_n,
-    input wire power_on,
-    input wire [6:0] canal, // de 1 a 64
-    output wire sr_clk,
-    output wire sr_data,
-    output wire [3:0] digit_enable
+module shift_display_driver (
+    input wire clk,             // clock do sistema
+    input wire rst_n,          // reset ativo baixo
+    input wire [7:0] seg_data, // dado a ser exibido (7 segmentos)
+    input wire [3:0] digit_sel,// dígito ativo (0-3)
+    input wire start,          // inicia transmissão serial
+    output reg sr_clk,         // clock serial para o 74HC164
+    output reg sr_data,        // dado serial (bit a bit)
+    output reg [3:0] digit_enable, // ativação do dígito correspondente
+    output reg busy            // sinaliza transmissão em andamento
 );
 
-    reg [1:0] digito_idx;
-    reg [7:0] seg_data;
-    reg [3:0] digit_sel;
-    reg start;
-    wire busy;
+    reg [3:0] bit_cnt;
+    reg [7:0] shift_reg;
+    reg [3:0] state;
 
-    // BCD para os dígitos do canal
-    reg [3:0] dezena, unidade;
-    wire [7:0] seg_dezena, seg_unidade;
+    parameter IDLE = 4'd0;
+    parameter LOAD = 4'd1;
+    parameter SHIFT = 4'd2;
+    parameter HOLD = 4'd3;
 
-    // Atualiza dígitos BCD
-    always @(*) begin
-        dezena  = (canal / 10) % 10;
-        unidade = canal % 10;
-    end
+    reg [7:0] clk_cnt;
+    parameter CLK_DIV = 1315; // para 38kHz a partir de 50MHz
+    reg clk_38khz;
 
-    // Conversores para 7 segmentos
-    bin_to_7seg conv_dez (
-        .bin(dezena),
-        .seg(seg_dezena)
-    );
-
-    bin_to_7seg conv_uni (
-        .bin(unidade),
-        .seg(seg_unidade)
-    );
-
-    // Controle do multiplexador (contagem 0 a 3)
-    reg [15:0] mux_cnt;
-    parameter MUX_MAX = 50_000; // 1ms @ 50MHz
-
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n)
-            mux_cnt <= 0;
-        else if (mux_cnt >= MUX_MAX)
-            mux_cnt <= 0;
-        else
-            mux_cnt <= mux_cnt + 1;
-    end
-
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n)
-            digito_idx <= 0;
-        else if (mux_cnt == MUX_MAX)
-            digito_idx <= digito_idx + 1;
-    end
-
-    // Multiplexa os dígitos com base no estado e power_on
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            seg_data <= 8'hFF;
-            digit_sel <= 0;
-            start <= 0;
-        end else if (mux_cnt == MUX_MAX && !busy) begin
-            if (!power_on) begin
-                seg_data <= 8'hFF;
-                digit_sel <= digito_idx;
-                start <= 1;
-            end else begin
-                case (digito_idx)
-                    2'd0: begin seg_data <= 8'b1000_0110; digit_sel <= 0; end // C
-                    2'd1: begin seg_data <= 8'hFF; digit_sel <= 1; end       // em branco
-                    2'd2: begin seg_data <= seg_dezena; digit_sel <= 2; end
-                    2'd3: begin seg_data <= seg_unidade; digit_sel <= 3; end
-                endcase
-                start <= 1;
-            end
+            clk_cnt <= 0;
+            clk_38khz <= 0;
+        end else if (clk_cnt >= CLK_DIV/2) begin
+            clk_cnt <= 0;
+            clk_38khz <= ~clk_38khz;
         end else begin
-            start <= 0;
+            clk_cnt <= clk_cnt + 1;
         end
     end
 
-    // Instância do driver de shift register
-    shift_display_driver driver (
+    always @(posedge clk_38khz or negedge rst_n) begin
+        if (!rst_n) begin
+            state <= IDLE;
+            sr_clk <= 0;
+            sr_data <= 0;
+            busy <= 0;
+            bit_cnt <= 0;
+            digit_enable <= 4'b0000;
+        end else begin
+            case (state)
+                IDLE: begin
+                    sr_clk <= 0;
+                    sr_data <= 0;
+                    busy <= 0;
+                    if (start) begin
+                        shift_reg <= seg_data;
+                        bit_cnt <= 0;
+                        busy <= 1;
+                        state <= SHIFT;
+                    end
+                end
+
+                SHIFT: begin
+                    if (bit_cnt < 8) begin
+                        sr_data <= shift_reg[7];
+                        shift_reg <= shift_reg << 1;
+                        sr_clk <= 1;
+                        bit_cnt <= bit_cnt + 1;
+                    end else begin
+                        sr_clk <= 0;
+                        state <= HOLD;
+                        digit_enable <= (4'b0001 << digit_sel);
+                    end
+                end
+
+                HOLD: begin
+                    state <= IDLE;
+                end
+            endcase
+        end
+    end
+endmodule
+
+// Testbench para shift_display_driver
+
+`timescale 1ns/100ps
+
+module tb_shift_display_driver;
+    reg clk;
+    reg rst_n;
+    reg [7:0] seg_data;
+    reg [3:0] digit_sel;
+    reg start;
+    wire sr_clk;
+    wire sr_data;
+    wire [3:0] digit_enable;
+    wire busy;
+
+    // Instância do módulo
+    shift_display_driver uut (
         .clk(clk),
         .rst_n(rst_n),
         .seg_data(seg_data),
@@ -96,60 +109,34 @@ module canal_display_ctrl (
         .busy(busy)
     );
 
-endmodule
-
-// Testbench para canal_display_ctrl
-
-`timescale 1ns/1ps
-
-module tb_canal_display_ctrl;
-    reg clk;
-    reg rst_n;
-    reg power_on;
-    reg [6:0] canal;
-
-    wire sr_clk;
-    wire sr_data;
-    wire [3:0] digit_enable;
-
-    canal_display_ctrl uut (
-        .clk(clk),
-        .rst_n(rst_n),
-        .power_on(power_on),
-        .canal(canal),
-        .sr_clk(sr_clk),
-        .sr_data(sr_data),
-        .digit_enable(digit_enable)
-    );
-
-    // Clock de 50 MHz
+    // Clock 50 MHz
     always #10 clk = ~clk;
 
     initial begin
-        $display("Iniciando Testbench do canal_display_ctrl");
+        $display("Inicio da simulação");
 
         clk = 0;
         rst_n = 0;
-        canal = 7'd1;
-        power_on = 0;
+        seg_data = 8'hC0;  // número 0 nos 7 segmentos comuns
+        digit_sel = 0;
+        start = 0;
 
         #100;
         rst_n = 1;
-        #100;
 
-        power_on = 1; // Liga o sistema
-
-        // Testa todos os 64 canais
-        repeat (64) begin
+        // Simula exibição sequencial de 0 a 3
+        repeat (4) begin
             @(posedge clk);
-            canal = canal + 1;
-            #200000; // Espera para exibir o canal (4 ciclos de 1ms + margem)
+            seg_data = seg_data + 8'h01; // próxima codificação (simulada)
+            digit_sel = digit_sel + 1;
+            start = 1;
+            @(posedge clk);
+            start = 0;
+            // espera até busy ser 0
+            wait (!busy);
         end
 
-        power_on = 0; // volta para standby
-        #500_000;
-
-        $display("Finalizando Testbench");
+        $display("Fim da simulação");
         $stop;
     end
 endmodule

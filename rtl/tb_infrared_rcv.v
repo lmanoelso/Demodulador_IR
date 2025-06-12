@@ -7,13 +7,15 @@ module tb_infrared_rcv;
     reg infrared_in;
     wire [19:0] data;
     wire repeat_en;
+    wire data_valid;
 
     infrared_rcv uut (
         .sys_clk(sys_clk),
         .sys_rst_n(sys_rst_n),
         .infrared_in(infrared_in),
         .data(data),
-        .repeat_en(repeat_en)
+        .repeat_en(repeat_en),
+        .data_valid(data_valid)
     );
 
     // Clock 50 MHz
@@ -27,21 +29,29 @@ module tb_infrared_rcv;
         sys_rst_n = 1;
         #100;
 
-        // Enviar frame NEC para POWER ON (0x807F)
-        send_nec(8'h4D, 8'h80);
-        #50_000_000;
-        $display("Comando decodificado: %h", data);
-        $stop;
+        send_nec(8'h4D, 8'h80); // POWER ON
+        #50_000;
+        send_nec(8'h4D, 8'h38); // CH-
+        #50_000;
+        send_nec(8'h4D, 8'h18); // CH+
+        #50_000;
+        send_nec(8'h4D, 8'h08); // VOL-
+        #50_000;
+        send_nec(8'h4D, 8'h30); // VOL+
+        #50_000;
+
+        $display("\nFim da simulação.");
+        $finish;
     end
 
     // Task para bit NEC
     task send_bit;
         input value;
         begin
-            infrared_in = 0; #560_000;
+            infrared_in = 0; #560;
             infrared_in = 1;
-            if (value) #1690_000;
-            else       #560_000;
+            if (value) #1690;
+            else       #560;
         end
     endtask
 
@@ -64,15 +74,15 @@ module tb_infrared_rcv;
             addr_inv = ~addr;
             cmd_inv = ~cmd;
             // start
-            infrared_in = 0; #9000_000;
-            infrared_in = 1; #4500_000;
+            infrared_in = 0; #9000;
+            infrared_in = 1; #4500;
             // dados
             send_byte(addr);
             send_byte(addr_inv);
             send_byte(cmd);
             send_byte(cmd_inv);
             // pulso final
-            infrared_in = 0; #560_000;
+            infrared_in = 0; #560;
             infrared_in = 1;
         end
     endtask

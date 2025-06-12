@@ -121,7 +121,7 @@ module tb_channel_ctrl;
         rst_n = 1;
 
         // POWER ON → Canal 1
-        send_ir_cmd(8'h45);
+        send_ir_cmd(8'h80);
         #100;
 
         // CH+ → Canal 2
@@ -133,11 +133,11 @@ module tb_channel_ctrl;
         #100;
 
         // CH- → Canal 2
-        send_ir_cmd(8'h52);
+        send_ir_cmd(8'h38);
         #100;
 
         // CH- → Canal 1
-        send_ir_cmd(8'h52);
+        send_ir_cmd(8'h38);
         #100;
 
         // CH- → permanece Canal 1
@@ -149,6 +149,17 @@ module tb_channel_ctrl;
             send_ir_cmd(8'h18);
             #100;
         end
+        rst_n = 0;
+        ir_cmd = 0;
+        ir_valid = 0;
+
+        #50;
+        rst_n = 1;
+        send_ir_cmd(8'h80);
+        send_ir_cmd(8'h52);
+        #100;
+        send_ir_cmd(8'h52);
+        #100;
 
         $display("===== Fim do Teste =====");
         $stop;
